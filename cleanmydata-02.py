@@ -4,7 +4,7 @@ import numpy as np
 import openai
 
 # Set your OpenAI API key here
-openai.api_key = "sk-proj-XATwByNWpeow89UpAVTGT3BlbkFJOFC0HGF6XsREvBPbxmJl"  # Replace with your actual API key
+openai.api_key = "sk-proj-c3HbJbkQB6f4NsFaBzIsT3BlbkFJFa0hJxdDGBWuU0FcQO9c"  # Replace with your actual API key
 
 # Function to get cleaning suggestions from OpenAI
 def get_cleaning_suggestions(df):
@@ -22,9 +22,9 @@ def get_cleaning_suggestions(df):
     return response.choices[0].message['content'].strip()
 
 # Function to handle missing numerical values
-def handle_numerical_missing(df):
+def handle_numerical_missing(df, selected_cols):
     numeric_method = st.sidebar.selectbox('Select method for numerical columns', ['Fill with mean', 'Fill with median', 'Fill with mode'])
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    numeric_cols = selected_cols if selected_cols else df.select_dtypes(include=[np.number]).columns
     
     if numeric_method == 'Fill with mean':
         for col in numeric_cols:
@@ -40,9 +40,9 @@ def handle_numerical_missing(df):
         st.sidebar.write('Filled missing numeric values with mode.')
 
 # Function to handle missing categorical values
-def handle_categorical_missing(df):
+def handle_categorical_missing(df, selected_cols):
     categorical_method = st.sidebar.selectbox('Select method for categorical columns', ['Impute with ffill', 'Impute with bfill'])
-    categorical_cols = df.select_dtypes(include=['object']).columns
+    categorical_cols = selected_cols if selected_cols else df.select_dtypes(include=['object']).columns
     
     if categorical_method == 'Impute with ffill':
         df[categorical_cols] = df[categorical_cols].fillna(method='ffill')
@@ -52,102 +52,88 @@ def handle_categorical_missing(df):
         st.sidebar.write('Imputed missing categorical values with backward fill (bfill).')
 
 # Function to remove trailing spaces from columns
-def remove_trailing_spaces(df):
-    if st.sidebar.checkbox('Remove trailing spaces from all columns'):
-        df.columns = df.columns.str.strip()
-        for col in df.select_dtypes(include=['object']).columns:
-            df[col] = df[col].str.strip()
-        st.write('Removed trailing spaces from all columns.')
+def remove_trailing_spaces(df, selected_cols):
+    df[selected_cols] = df[selected_cols].apply(lambda x: x.str.strip())
+    st.sidebar.write('Removed trailing spaces from selected columns.')
 
-# Function to capitalize all strings in the dataset
-def capitalize_strings(df):
-    if st.sidebar.checkbox('Capitalize all strings in the dataset'):
-        for col in df.select_dtypes(include=['object']).columns:
-            df[col] = df[col].str.upper()
-        st.write('Capitalized all strings in the dataset.')
+# Function to capitalize all strings in the dataset or specific columns
+def capitalize_strings(df, selected_cols):
+    if selected_cols:
+        for col in selected_cols:
+            df[col] = df[col].apply(lambda x: x.upper() if isinstance(x, str) else x)
+        st.sidebar.write(f'Capitalized strings in columns: {", ".join(selected_cols)}')
+    else:
+        df[df.select_dtypes(include=['object']).columns] = df[df.select_dtypes(include=['object']).columns].apply(lambda x: x.str.upper() if isinstance(x, str) else x)
+        st.sidebar.write('Capitalized all strings in the dataset.')
 
-# Function to remove duplicate rows
-def remove_duplicates(df):
-    initial_duplicates = df.duplicated().sum()
-    df = df.drop_duplicates()
-    st.write(f'Removed {initial_duplicates} duplicate rows.')
-    return df
 
-# Function to convert column to datetime
-def convert_to_datetime(df):
-    st.sidebar.subheader('Change Column to DateTime Format')
-    col = st.sidebar.selectbox('Select column to convert to datetime', df.columns)
-    try:
-        df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
-        st.sidebar.write(f'Converted column {col} to datetime format (YYYY-MM-DD).')
-    except Exception as e:
-        st.error(f'Error converting column {col} to datetime: {e}')
-
-# Function to change column datatype
-def change_column_datatype(df):
-    st.sidebar.subheader('Change Column Datatype')
-    col = st.sidebar.selectbox('Select column to change datatype', df.columns)
-    dtype = st.sidebar.selectbox('Select new datatype', ['int', 'float', 'str'])
-    try:
-        if dtype == 'int':
-            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
-            st.sidebar.write(f'Changed datatype of column {col} to int.')
-        elif dtype == 'float':
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            st.sidebar.write(f'Changed datatype of column {col} to float.')
-        elif dtype == 'str':
-            df[col] = df[col].astype(str)
-            st.sidebar.write(f'Changed datatype of column {col} to str.')
-    except Exception as e:
-        st.error(f'Error changing datatype of column {col}: {e}')
+# Function to lowercase all strings in the dataset or specific columns
+def lowercase_strings(df, selected_cols):
+    if selected_cols:
+        for col in selected_cols:
+            df[col] = df[col].apply(lambda x: x.lower() if isinstance(x, str) else x)
+        st.sidebar.write(f'Lowercased strings in columns: {", ".join(selected_cols)}')
+    else:
+        df[df.select_dtypes(include=['object']).columns] = df[df.select_dtypes(include=['object']).columns].apply(lambda x: x.str.lower() if isinstance(x, str) else x)
+        st.sidebar.write('Lowercased all strings in the dataset.')
 
 # Function to remove text before or after a delimiter
-def remove_text_before_after_delimiter(df):
-    st.sidebar.subheader('Remove Text Before/After Delimiter')
-    col = st.sidebar.selectbox('Select column', df.columns)
-    delimiter_expanded = st.sidebar.checkbox('Click to Remove Text Before/After Delimiter')
+def remove_text_before_after_delimiter(df, selected_cols):
+    delimiter = st.sidebar.text_input('Enter delimiter')
+    action = st.sidebar.radio('Select action', ['Remove before delimiter', 'Remove after delimiter'])
     
-    if delimiter_expanded:
-        delimiter = st.sidebar.text_input('Enter delimiter')
-        action = st.sidebar.radio('Select action', ['Remove before delimiter', 'Remove after delimiter'])
-        
-        try:
-            if action == 'Remove before delimiter':
-                df[col] = df[col].str.split(delimiter).str[-1]
-                st.sidebar.write(f'Removed text before delimiter "{delimiter}" in column {col}.')
-            elif action == 'Remove after delimiter':
-                df[col] = df[col].str.split(delimiter).str[0]
-                st.sidebar.write(f'Removed text after delimiter "{delimiter}" in column {col}.')
-        except Exception as e:
-            st.error(f'Error removing text: {e}')
-    else:
-        st.sidebar.write('Expand to remove text before or after delimiter.')
+    for col in selected_cols:
+        if action == 'Remove before delimiter':
+            df[col] = df[col].str.split(delimiter).str[-1]
+        elif action == 'Remove after delimiter':
+            df[col] = df[col].str.split(delimiter).str[0]
+    st.sidebar.write(f'Removed text {action} delimiter "{delimiter}" in columns: {", ".join(selected_cols)}')
 
-# Function to impute missing values based on selected strategy
+# Function to impute missing values based on selected strategy for specific columns
 def impute_missing_values(df):
-    st.sidebar.subheader('Handle Missing Values')
-    if st.sidebar.checkbox('Handle Missing Values for Numerical Columns'):
-        handle_numerical_missing(df)
-    if st.sidebar.checkbox('Handle Missing Values for Categorical Columns'):
-        handle_categorical_missing(df)
+    numeric_cols = st.sidebar.multiselect('Select numerical columns to handle missing values', df.select_dtypes(include=[np.number]).columns)
+    if numeric_cols:
+        handle_numerical_missing(df, numeric_cols)
+    
+    categorical_cols = st.sidebar.multiselect('Select categorical columns to handle missing values', df.select_dtypes(include=['object']).columns)
+    if categorical_cols:
+        handle_categorical_missing(df, categorical_cols)
+    
     if st.sidebar.checkbox('Drop Rows with Null Values'):
         df.dropna(inplace=True)
-        st.write('Dropped rows with null values.')
+        st.sidebar.write('Dropped rows with null values.')
 
 # Function to set the first row as the header
 def set_first_row_as_header(df):
-    if st.sidebar.checkbox('Set first row as header'):
-        df.columns = df.iloc[0]
-        df = df[1:].reset_index(drop=True)
-        st.write('Set the first row as the header.')
+    df.columns = df.iloc[0]
+    df = df[1:].reset_index(drop=True)
+    st.sidebar.write('Set the first row as the header.')
     return df
 
 # Function to clear all filters applied to the dataset
 def clear_filters(df):
-    if st.sidebar.button('Clear All Filters'):
-        df = original_data.copy()
-        st.write('Cleared all filters and restored the original data.')
+    df = original_data.copy()
+    st.sidebar.write('Cleared all filters and restored the original data.')
     return df
+
+# Function to change column datatype
+def change_column_datatype(df, selected_cols):
+    if selected_cols:
+        dtype = st.sidebar.selectbox('Select new datatype', ['int', 'float', 'str'])
+        try:
+            for col in selected_cols:
+                if dtype == 'int':
+                    df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+                    st.sidebar.write(f'Changed datatype of column {col} to int.')
+                elif dtype == 'float':
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    st.sidebar.write(f'Changed datatype of column {col} to float.')
+                elif dtype == 'str':
+                    df[col] = df[col].astype(str)
+                    st.sidebar.write(f'Changed datatype of column {col} to str.')
+        except Exception as e:
+            st.sidebar.error(f'Error changing datatype: {e}')
+
 
 # Placeholder for the original and cleaned data
 original_data = None
@@ -174,15 +160,24 @@ def load_data_display_summary(file):
     st.subheader("Exploratory Data Analysis (EDA)")
     st.write("Data Summary:")
     st.write(df.describe())
-    # st.write("Data Information:")
-    # st.write(df.info())
 
-    # Display data types and non-null counts
+    # Display data types and non-null counts side by side
     st.subheader("Data Types and Non-Null Counts")
-    st.write("Data Types:")
-    st.write(df.dtypes)
-    st.write("Non-Null Count:")
-    st.write(df.notnull().sum())
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write("Data Types:")
+        st.write(df.dtypes)
+
+    with col2:
+        st.write("Non-Null Count:")
+        st.write(df.notnull().sum())
+
+    # Button to get cleaning suggestions
+    if st.button('Get AI Cleaning Suggestions'):
+        suggestions = get_cleaning_suggestions(df)
+        st.subheader("Cleaning Suggestions from OpenAI")
+        st.write(suggestions)
 
     return df
 
@@ -191,42 +186,51 @@ if uploaded_file is not None:
         original_data = load_data_display_summary(uploaded_file)
         cleaned_data = original_data.copy()
 
-        # Button to get cleaning suggestions
-        if st.button('Get Cleaning Suggestions'):
-            suggestions = get_cleaning_suggestions(original_data)
-            st.subheader("Cleaning Suggestions from OpenAI")
-            st.write(suggestions)
-
         # Sidebar for data cleaning techniques
         st.sidebar.header('Data Cleaning Techniques')
 
         # Perform data cleaning operations in the specified order
-        st.sidebar.subheader('Set First Row as Header')
-        cleaned_data = set_first_row_as_header(cleaned_data)
-
-        # st.sidebar.subheader('Handle Missing Values')
-        impute_missing_values(cleaned_data)
-
-        st.sidebar.subheader('Change Column Datatype')
+        if st.sidebar.checkbox('Set First Row as Header'):
+            st.subheader('Set First Row as Header')
+            cleaned_data = set_first_row_as_header(cleaned_data)
+        
+        if st.sidebar.checkbox('Impute Missing Values'):
+            st.subheader('Impute Missing Values')
+            impute_missing_values(cleaned_data)
+        
         if st.sidebar.checkbox('Change Column Datatype'):
-            change_column_datatype(cleaned_data)
-
-        st.sidebar.subheader('Change Column to DateTime Format')
-        if st.sidebar.checkbox('Change Column to DateTime Format'):
-            convert_to_datetime(cleaned_data)
-
-        st.sidebar.subheader('Remove Trailing Spaces')
-        remove_trailing_spaces(cleaned_data)
-
-        st.sidebar.subheader('Capitalize Strings')
-        capitalize_strings(cleaned_data)
-
-        st.sidebar.subheader('Remove Text Before/After Delimiter')
-        remove_text_before_after_delimiter(cleaned_data)
-
-        # Clear filters
-        cleaned_data = clear_filters(cleaned_data)
-
+            st.subheader('Change Column Datatype')
+            selected_cols = st.sidebar.multiselect('Select columns to change datatype', cleaned_data.columns)
+            if selected_cols:
+                change_column_datatype(cleaned_data, selected_cols)
+        
+        if st.sidebar.checkbox('Remove Trailing Spaces'):
+            st.subheader('Remove Trailing Spaces')
+            selected_cols = st.sidebar.multiselect('Select columns to remove trailing spaces', cleaned_data.select_dtypes(include=['object']).columns)
+            if selected_cols:
+                remove_trailing_spaces(cleaned_data, selected_cols)
+        
+        if st.sidebar.checkbox('Capitalize Strings'):
+            st.subheader('Capitalize Strings')
+            selected_cols = st.sidebar.multiselect('Select columns to capitalize strings', cleaned_data.select_dtypes(include=['object']).columns)
+            if selected_cols:
+                capitalize_strings(cleaned_data, selected_cols)
+        
+        if st.sidebar.checkbox('Lowercase Strings'):
+            st.subheader('Lowercase Strings')
+            selected_cols = st.sidebar.multiselect('Select columns to lowercase strings', cleaned_data.select_dtypes(include=['object']).columns)
+            if selected_cols:
+                lowercase_strings(cleaned_data, selected_cols)
+        
+        if st.sidebar.checkbox('Remove Text Before/After Delimiter'):
+            st.subheader('Remove Text Before/After Delimiter')
+            selected_cols = st.sidebar.multiselect('Select columns to remove text before/after delimiter', cleaned_data.columns)
+            if selected_cols:
+                remove_text_before_after_delimiter(cleaned_data, selected_cols)
+        
+        if st.sidebar.button('Clear All Filters'):
+            cleaned_data = clear_filters(cleaned_data)
+        
         # Display cleaned data
         st.subheader("Cleaned Data")
         st.write(cleaned_data)
@@ -235,18 +239,31 @@ if uploaded_file is not None:
         st.write(f"Number of rows after cleaning: {cleaned_data.shape[0]}")
         st.write(f"Number of columns after cleaning: {cleaned_data.shape[1]}")
 
+        # Display data types and non-null counts after cleaning
+        st.subheader("Data Types and Non-Null Counts After Cleaning")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.write("Data Types:")
+            st.write(cleaned_data.dtypes)
+
+        with col2:
+            st.write("Non-Null Count:")
+            st.write(cleaned_data.notnull().sum())
+
         # Download cleaned data
-        csv = cleaned_data.to_csv(index=False)
         st.download_button(
-            label="Download Cleaned Dataset",
-            data=csv,
-            file_name='cleaned_data.csv',
-            mime='text/csv'
+            label="Download Cleaned Data as CSV",
+            data=cleaned_data.to_csv(index=False),
+            file_name="cleaned_data.csv",
+            mime="text/csv"
         )
 
+        # Embed Google Form
+        st.markdown('<iframe src="https://docs.google.com/forms/d/e/1FAIpQLSeOo0Js0LTPBCCmZPaeYfff119SpLE7qshxID209x0sJUhmcQ/viewform?embedded=true" width="640" height="2442" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>', unsafe_allow_html=True)
+
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"An error occurred: {e}")
 
 # Footer
-st.markdown("---")
-st.markdown("Built by [Sai Raam](https://www.linkedin.com/in/srinrealyf/) - A [StatBir](https://twitter.com/statbir) Product | Made with ❤️ in India")
+st.markdown('<footer style="text-align: center;">Built by Sai Raam, a StatBir product.</footer>', unsafe_allow_html=True)
